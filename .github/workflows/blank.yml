@@ -64,7 +64,7 @@ jobs:
 
           # 获取FTP站点版本列表
           echo "🔍 Fetching versions from $FTP_URL..."
-          PAGE_CONTENT=$(curl -s "$FTP_URL")
+          PAGE_CONTENT=$(curl -fsSL --user-agent "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36" "$FTP_URL")
           if [ $? -ne 0 ]; then
             echo "❌ Failed to fetch FTP page content. Check network connection or FTP URL."
             exit 1
@@ -82,7 +82,7 @@ jobs:
 
           # 获取GitHub Release列表
           echo "🔄 Fetching GitHub releases for $GITHUB_OWNER/$GITHUB_REPO..."
-          RELEASES_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+          RELEASES_DATA=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" \
             "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases")
           if [ $? -ne 0 ]; then
             echo "❌ GitHub API request failed. Check token permissions or network."
