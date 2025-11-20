@@ -1,11 +1,17 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: Download electron and release
 
 # Controls when the workflow will run
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
+env:
+  # 在此处设置默认环境变量（可被工作流调度时覆盖）
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_OWNER: loong64-abi1-0
+  GITHUB_REPO: electron
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -19,12 +25,106 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       # - uses: actions/checkout@v4
 
+      - name: Install Deps
+        run: |
+          sudo apt update
+          sudo apt install gh jq wget curl -y
+
       # Runs a single command using the runners shell
       - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+        shell: bash
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          set -e
+          # 检查必要工具
+          if ! command -v curl &> /dev/null; then
+            echo "Error: curl is required but not installed. Exiting."
+            exit 1
+          fi
+          if ! command -v jq &> /dev/null; then
+            echo "Error: jq is required but not installed. Exiting."
+            exit 1
+          fi
+
+          # 环境变量配置 (建议通过环境变量设置)
+          GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+          GITHUB_OWNER="${GITHUB_OWNER:-}"
+          GITHUB_REPO="${GITHUB_REPO:-}"
+          FTP_URL="https://ftp.loongnix.cn/electron/LoongArch"
+
+          # 验证必要参数
+          if [ -z "$GITHUB_TOKEN" ] || [ -z "$GITHUB_OWNER" ] || [ -z "$GITHUB_REPO" ]; then
+            echo "Error: Missing required environment variables:"
+            echo "  - GITHUB_TOKEN (GitHub personal access token)"
+            echo "  - GITHUB_OWNER (GitHub repository owner)"
+            echo "  - GITHUB_REPO (GitHub repository name)"
+            exit 1
+          fi
+
+          echo "🚀 Starting Electron release sync process..."
+
+          # 获取FTP站点版本列表
+          echo "🔍 Fetching versions from $FTP_URL..."
+          PAGE_CONTENT=$(curl -s "$FTP_URL")
+          if [ $? -ne 0 ]; then
+            echo "❌ Failed to fetch FTP page content. Check network connection or FTP URL."
+            exit 1
+          fi
+
+          # 提取版本号 (匹配 vX.X.X/ 格式)
+          VERSIONS_FROM_FTP=$(echo "$PAGE_CONTENT" | grep -oP 'href="v\d+\.\d+\.\d+/"' | sed -E 's/href="v([0-9.]+)\/".*/v\1/')
+
+          if [ -z "$VERSIONS_FROM_FTP" ]; then
+            echo "❌ No valid versions found in FTP response. Check FTP structure."
+            exit 1
+          fi
+
+          echo "✅ Found ${#VERSIONS_FROM_FTP[@]} versions from FTP"
+
+          # 获取GitHub Release列表
+          echo "🔄 Fetching GitHub releases for $GITHUB_OWNER/$GITHUB_REPO..."
+          RELEASES_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases")
+          if [ $? -ne 0 ]; then
+            echo "❌ GitHub API request failed. Check token permissions or network."
+            exit 1
+          fi
+
+          # 提取已存在的tag names
+          TAG_NAMES=$(echo "$RELEASES_DATA" | jq -r '.[].tag_name' 2>/dev/null)
+          if [ $? -ne 0 ]; then
+            echo "❌ Failed to parse GitHub releases. Check jq installation or API response."
+            exit 1
+          fi
+
+          echo "✅ Found ${#TAG_NAMES[@]} existing releases in GitHub"
+
+          # 处理每个新版本
+          for VERSION in $VERSIONS_FROM_FTP; do
+            # 检查是否已存在
+            if echo "$TAG_NAMES" | grep -q "^$VERSION$"; then
+              echo "ℹ️  Version $VERSION already exists in GitHub. Skipping."
+              continue
+            fi
+
+            echo "✨ New version detected: $VERSION"
+
+            # 构建下载URL
+            DOWNLOAD_URL="$FTP_URL/$VERSION"
+
+            # 下载文件
+            echo "📥 Downloading $FILE_NAME from $DOWNLOAD_URL..."
+            if ! wget -r -np -nH "$DOWNLOAD_URL"; then
+              echo "❌ Download failed for $DOWNLOAD_URL"
+              exit 1
+            fi
+
+            # 创建GitHub Release
+            echo "📝 Creating release for $VERSION..."
+            gh release create "$VERSION" --title "$VERSION" --notes "Automated release for $VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO"
+            gh release upload "$VERSION" ./electron/LoongArch/"$VERSION"/* --clobber --repo "$GITHUB_OWNER/$GITHUB_REPO"
+
+            # 清理临时文件
+            rm -rf ./electron/LoongArch/"$VERSION"
+          done
+
+          echo "🎉 Process completed successfully!"
