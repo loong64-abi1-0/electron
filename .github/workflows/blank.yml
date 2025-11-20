@@ -20,6 +20,9 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -71,14 +74,14 @@ jobs:
           fi
 
           # 提取版本号 (匹配 vX.X.X/ 格式)
-          VERSIONS_FROM_FTP=$(echo "$PAGE_CONTENT" | grep -oP 'href="v\d+\.\d+\.\d+/"' | sed -E 's/href="v([0-9.]+)\/".*/v\1/')
+          VERSIONS_FROM_FTP=$(echo "$PAGE_CONTENT" | grep -o 'href="v[0-9]\+\.[0-9]\+\.[0-9]\+/"' | sed -E 's/href="v([0-9.]+)\/".*/v\1/')
 
           if [ -z "$VERSIONS_FROM_FTP" ]; then
             echo "❌ No valid versions found in FTP response. Check FTP structure."
             exit 1
           fi
-
-          echo "✅ Found ${#VERSIONS_FROM_FTP[@]} versions from FTP"
+          VERSIONS_FROM_FTP_ARRAY=(${VERSIONS_FROM_FTP// / })
+          echo "✅ Found ${#VERSIONS_FROM_FTP_ARRAY[@]} versions from FTP"
 
           # 获取GitHub Release列表
           echo "🔄 Fetching GitHub releases for $GITHUB_OWNER/$GITHUB_REPO..."
@@ -96,7 +99,8 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Found ${#TAG_NAMES[@]} existing releases in GitHub"
+          TAG_NAMES_ARRAY=(${TAG_NAMES// / })
+          echo "✅ Found ${#TAG_NAMES_ARRAY[@]} existing releases in GitHub"
 
           # 处理每个新版本
           for VERSION in $VERSIONS_FROM_FTP; do
@@ -113,7 +117,7 @@ jobs:
 
             # 下载文件
             echo "📥 Downloading $FILE_NAME from $DOWNLOAD_URL ..."
-            if ! wget  --header="User-Agent: Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11" -q --show-progress -np -nH -r "$DOWNLOAD_URL"; then
+            if ! wget  --header="User-Agent: Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11" -q -np -nH -r "$DOWNLOAD_URL"; then
               echo "❌ Download failed for $DOWNLOAD_URL"
               exit 1
             fi
