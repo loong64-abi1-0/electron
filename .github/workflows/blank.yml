@@ -109,11 +109,11 @@ jobs:
             echo "✨ New version detected: $VERSION"
 
             # 构建下载URL
-            DOWNLOAD_URL="$FTP_URL/$VERSION"
+            DOWNLOAD_URL="$FTP_URL/$VERSION/"
 
             # 下载文件
-            echo "📥 Downloading $FILE_NAME from $DOWNLOAD_URL..."
-            if ! wget  --header="User-Agent: Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11" -r -np -nH "$DOWNLOAD_URL"; then
+            echo "📥 Downloading $FILE_NAME from $DOWNLOAD_URL ..."
+            if ! wget  --header="User-Agent: Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11" -q --show-progress -np -nH -r "$DOWNLOAD_URL"; then
               echo "❌ Download failed for $DOWNLOAD_URL"
               exit 1
             fi
